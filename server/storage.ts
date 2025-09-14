@@ -129,6 +129,8 @@ export class MemStorage implements IStorage {
     const float: ArgoFloat = {
       ...insertFloat,
       id,
+      status: insertFloat.status || "active",
+      region: insertFloat.region || null,
       deploymentDate: new Date(),
       lastUpdate: new Date()
     };
@@ -172,6 +174,8 @@ export class MemStorage implements IStorage {
     const measurement: Measurement = {
       ...insertMeasurement,
       id,
+      pressure: insertMeasurement.pressure || null,
+      cycleNumber: insertMeasurement.cycleNumber || null,
       recordedAt: new Date()
     };
     this.measurements.set(id, measurement);
@@ -184,6 +188,10 @@ export class MemStorage implements IStorage {
     const query: ChatQuery = {
       ...insertQuery,
       id,
+      generatedSql: insertQuery.generatedSql || null,
+      response: insertQuery.response || null,
+      queryType: insertQuery.queryType || null,
+      resultData: insertQuery.resultData || null,
       createdAt: new Date()
     };
     this.chatQueries.set(id, query);
