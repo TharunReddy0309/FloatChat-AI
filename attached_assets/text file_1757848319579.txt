@@ -1,0 +1,145 @@
+# FloatChat — Tailored Development Roadmap & Website Content
+
+*Adapted from your ladder.md into a project-specific roadmap and copy-ready website sections for the SIH PoC (SIH25040).*
+
+---
+
+## 1. Landing / Static Showcase (Ideation)
+
+**Goal:** Present the idea clearly on a simple landing page for judges and stakeholders.
+
+**What to include (content-ready):**
+
+* Title: **FloatChat — Conversational Interface for Argo Ocean Data**
+* One‑liner: "Ask the ocean: natural‑language queries, interactive maps and profile plots from Argo float data."
+* Problem summary (2 lines): NetCDF is complex; FloatChat makes Argo data accessible to non‑experts via chat + visual dashboards.
+* Quick demo links: `Demo (Map)`, `Chat PoC`, `Download sample CSV` (point to GitHub or hosted demo).
+* Tech badges: Postgres · PostGIS · FastAPI · Next.js · Leaflet · ChromaDB · LLM (RAG)
+* Team & contact (team lead name + email)
+
+**Deliverable:** Single-page static site that links to the working PoC and the GitHub repo.
+
+---
+
+## 2. PoC → Dynamic Static Site
+
+**Goal:** Make a data-driven demo that proves core features quickly.
+
+**Key items to implement:**
+
+* NetCDF → CSV converter (script) with a sample Indian Ocean float set (10–50 floats). Provide a *Download sample CSV* link.
+* CSV loader into PostgreSQL (simple instructions + one-click COPY command). Host DB locally or via free cloud (Railway/Neon) for demo.
+* Leaflet map showing last-known float positions + simple popups (float\_id, last cycle time).
+* Chat PoC: small web form that accepts NL queries, calls a sandboxed LLM stub that returns a pre-built SQL for demo queries.
+* Profile plot: depth vs temp/salinity for a clicked float (Plotly embedded).
+
+**Deliverable:** Lightweight Next.js or static site with the Map + Chat embed + CSV download.
+
+---
+
+## 3. Prototype — Starter Kit with Auth & CRUD
+
+**Goal:** Bring real backend integration and role-based access.
+
+**Must‑haves:**
+
+* Backend: FastAPI with endpoints (`/api/floats`, `/api/cycles/{id}/profile`, `/api/chat/query`).
+* Database: PostgreSQL + PostGIS; `floats`, `cycles`, `measurements` tables per ERD.
+* Basic Auth: JWT login; roles: `admin`, `researcher`, `viewer`.
+* Chroma ingestion script that creates summaries per float/cycle.
+* UI: protected Dashboard route for researchers; public view for visitors.
+
+**Deliverable:** Full-stack repo (frontend + backend) with simple deployment instructions.
+
+---
+
+## 4. MVP — Functional Web App (PoC polish)
+
+**Goal:** Add LLM RAG, polished UI, query validation, and exports.
+
+**Features:**
+
+* LLM (text→SQL) using MCP prompt skeleton; validate generated SQL, run read‑only.
+* ChromaDB semantic layer for metadata search.
+* Alerts backend: generate simple alerts when thresholds reached; show headline on homepage.
+* Export: CSV download of query results; NetCDF reconstruction endpoint (optional).
+* UI enhancements: nice transitions, tooltips, mobile-responsive layout.
+
+**Deliverable:** Demo-ready app with sample queries and a short guided walkthrough for judges.
+
+---
+
+## 5. Alpha — Developer Framework (stability & contributors)
+
+**Goal:** Make codebase contributor-friendly and testable.
+
+**Work:**
+
+* Convert frontend to Next.js + Tailwind + shadcn for components.
+* Add type safety: Zod (frontend) + Pydantic (backend).
+* Add unit tests: Jest (frontend), Pytest (backend).
+* CI: GitHub Actions for lint/test/build.
+
+**Deliverable:** Clean repo with contributing.md and automated checks.
+
+---
+
+## 6. Beta — Containerized & Deployable
+
+**Goal:** Easy-to-run demo that judges can spin up locally or in cloud.
+
+**Work:**
+
+* Docker Compose: postgres, backend, chroma, frontend (dev mode). Provide `docker-compose up`.
+* Simple seed script to load demo CSV into the DB.
+* Health checks and a `/api/health` endpoint.
+
+**Deliverable:** dockerized PoC and short runbook.
+
+---
+
+## 7. Product — Scalable & Future (optional)
+
+**Goal:** Note for future work (not required for SIH PoC).
+
+**Work:**
+
+* Move to Parquet/S3 for large data; run analytics on DuckDB or Spark.
+* Kubernetes deployment, autoscaling models, observability.
+
+---
+
+## Website-ready Sections (copy/paste friendly)
+
+1. **Hero:** Title; 1‑line tagline; CTA buttons (Try demo / GitHub).
+2. **Problem:** 2 short bullets explaining why NetCDF is hard and who’s affected.
+3. **Solution:** 3 bullets showing chat, map, and export features.
+4. **Tech Stack:** 1 line of tech badges + link to repo.
+5. **Live Demo:** Embedded map + chat iframe or link.
+6. **Roadmap:** Small timeline (PoC → MVP → Beta).
+7. **Team & Contact:** Names, roles, email.
+
+---
+
+## Quick Assets Checklist for website makers
+
+* One hero image or GIF of the map + chat.
+* 2–3 screenshots (map, profile plot, chat result).
+* Short demo video (30–60s).
+* Link to GitHub repo and sample CSV.
+
+---
+
+## Is this enough to paste into a website-builder? (short answer)
+
+Yes — this document provides concise sections and copy-ready bullets that are suitable for pasting into a website builder (Webflow, Wix, GitHub Pages, etc.). For an attractive, clear site you should also provide *1) hero image/GIF*, *2) 2–3 screenshots*, and *3) links to the running demo and repo*. The builder will need these visual assets and the demo links to produce a convincing presentation.
+
+---
+
+If you want, I can now:
+
+* produce ready-made HTML blocks for each website section, or
+* export the roadmap into a short one-page Markdown or a compact JSON content object you can paste into a site-builder, or
+* generate the `docker-compose.yml` and seed scripts for the PoC.
+
+Which one should I do next?
