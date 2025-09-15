@@ -4,38 +4,93 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { BarChart3, Download, TrendingUp, TrendingDown, Waves } from "lucide-react";
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useToast } from "@/hooks/use-toast";
 
 interface DataPoint {
   depth: number;
   temperature: number;
   salinity: number;
+  pressure: number | null;
+}
+
+interface FloatData {
+  id: string;
+  floatId: string;
+  status: string;
 }
 
 export default function DataVisualization() {
   const [selectedFloat, setSelectedFloat] = useState("ARGO001");
   const [dataType, setDataType] = useState("temperature");
+  const { toast } = useToast();
 
-  // TODO: Remove mock data - replace with real Argo float profile data
-  const mockProfileData: DataPoint[] = [
-    { depth: 0, temperature: 28.5, salinity: 34.7 },
-    { depth: 50, temperature: 27.8, salinity: 34.8 },
-    { depth: 100, temperature: 26.2, salinity: 34.9 },
-    { depth: 150, temperature: 24.5, salinity: 35.0 },
-    { depth: 200, temperature: 22.8, salinity: 35.1 },
-    { depth: 250, temperature: 20.1, salinity: 35.2 },
-    { depth: 300, temperature: 18.4, salinity: 35.3 },
-    { depth: 400, temperature: 15.7, salinity: 35.4 },
-    { depth: 500, temperature: 12.9, salinity: 35.5 }
-  ];
+  // Fetch available floats
+  const { data: floats = [] } = useQuery<FloatData[]>({
+    queryKey: ['/api/floats'],
+    queryFn: async (): Promise<FloatData[]> => {
+      const response = await fetch('/api/floats');
+      if (!response.ok) throw new Error('Failed to fetch floats');
+      return response.json();
+    }
+  });
 
-  const handleExportData = () => {
-    console.log('Exporting CSV data for float:', selectedFloat);
-    // TODO: Implement actual CSV export functionality
+  // Fetch profile data for selected float
+  const { data: profileData = [], isLoading: profileLoading } = useQuery<DataPoint[]>({
+    queryKey: ['/api/measurements', selectedFloat, 'profile'],
+    queryFn: async (): Promise<DataPoint[]> => {
+      const response = await fetch(`/api/measurements/${selectedFloat}/profile`);
+      if (!response.ok) {
+        if (response.status === 404) return [];
+        throw new Error('Failed to fetch profile data');
+      }
+      return response.json();
+    },
+    enabled: !!selectedFloat
+  });
+
+  const handleExportData = async () => {
+    try {
+      const response = await fetch(`/api/export/csv?floatId=${selectedFloat}`);
+      if (!response.ok) throw new Error('Export failed');
+      
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${selectedFloat}_measurements.csv`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      
+      toast({
+        title: "Export Successful",
+        description: `Data for ${selectedFloat} exported successfully.`,
+      });
+    } catch (error) {
+      console.error('Export error:', error);
+      toast({
+        title: "Export Failed",
+        description: "Failed to export CSV data. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
-  const maxValue = dataType === 'temperature' 
-    ? Math.max(...mockProfileData.map(d => d.temperature))
-    : Math.max(...mockProfileData.map(d => d.salinity));
+  const maxValue = profileData.length > 0 ? (
+    dataType === 'temperature' 
+      ? Math.max(...profileData.map(d => d.temperature))
+      : Math.max(...profileData.map(d => d.salinity))
+  ) : 1;
+  
+  const minValue = profileData.length > 0 ? (
+    dataType === 'temperature' 
+      ? Math.min(...profileData.map(d => d.temperature))
+      : Math.min(...profileData.map(d => d.salinity))
+  ) : 0;
+  
+  const maxDepth = profileData.length > 0 ? Math.max(...profileData.map(d => d.depth)) : 500;
 
   return (
     <section className="py-16 bg-background">
@@ -62,10 +117,11 @@ export default function DataVisualization() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="ARGO001">ARGO001</SelectItem>
-                      <SelectItem value="ARGO002">ARGO002</SelectItem>
-                      <SelectItem value="ARGO003">ARGO003</SelectItem>
-                      <SelectItem value="ARGO004">ARGO004</SelectItem>
+                      {floats.map((float) => (
+                        <SelectItem key={float.id} value={float.floatId}>
+                          {float.floatId} ({float.status})
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -103,20 +159,32 @@ export default function DataVisualization() {
               <CardContent className="space-y-4">
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-muted-foreground">Max Depth</span>
-                  <Badge variant="outline">500m</Badge>
+                  <Badge variant="outline">
+                    {profileLoading ? 'Loading...' : `${maxDepth}m`}
+                  </Badge>
                 </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-muted-foreground">Surface {dataType === 'temperature' ? 'Temp' : 'Salinity'}</span>
-                  <span className="font-semibold">
-                    {dataType === 'temperature' ? '28.5°C' : '34.7 PSU'}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-muted-foreground">Deep {dataType === 'temperature' ? 'Temp' : 'Salinity'}</span>
-                  <span className="font-semibold">
-                    {dataType === 'temperature' ? '12.9°C' : '35.5 PSU'}
-                  </span>
-                </div>
+                {profileData.length > 0 && (
+                  <>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-muted-foreground">Surface {dataType === 'temperature' ? 'Temp' : 'Salinity'}</span>
+                      <span className="font-semibold">
+                        {dataType === 'temperature' 
+                          ? `${profileData[0]?.temperature || 0}°C`
+                          : `${profileData[0]?.salinity || 0} PSU`
+                        }
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-muted-foreground">Deep {dataType === 'temperature' ? 'Temp' : 'Salinity'}</span>
+                      <span className="font-semibold">
+                        {dataType === 'temperature' 
+                          ? `${profileData[profileData.length - 1]?.temperature || 0}°C`
+                          : `${profileData[profileData.length - 1]?.salinity || 0} PSU`
+                        }
+                      </span>
+                    </div>
+                  </>
+                )}
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-muted-foreground">Gradient</span>
                   <div className="flex items-center gap-1">
@@ -149,9 +217,24 @@ export default function DataVisualization() {
               </CardHeader>
               <CardContent className="h-[520px] p-6">
                 <div className="relative w-full h-full">
-                  {/* Chart Background */}
-                  <div className="absolute inset-0 bg-gradient-to-b from-chart-1/5 to-chart-1/20 rounded-lg">
-                    <svg width="100%" height="100%" className="absolute inset-0">
+                  {profileLoading ? (
+                    <div className="flex items-center justify-center h-full">
+                      <div className="text-center">
+                        <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+                        <p className="text-muted-foreground">Loading profile data...</p>
+                      </div>
+                    </div>
+                  ) : profileData.length === 0 ? (
+                    <div className="flex items-center justify-center h-full">
+                      <div className="text-center">
+                        <BarChart3 className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                        <p className="text-muted-foreground">No profile data available for {selectedFloat}</p>
+                      </div>
+                    </div>
+                  ) : (
+                    /* Chart Background */
+                    <div className="absolute inset-0 bg-gradient-to-b from-chart-1/5 to-chart-1/20 rounded-lg">
+                      <svg width="100%" height="100%" className="absolute inset-0">
                       <defs>
                         <linearGradient id="depthGradient" x1="0%" y1="0%" x2="0%" y2="100%">
                           <stop offset="0%" stopColor="rgb(147, 197, 253)" stopOpacity="0.1"/>
@@ -187,77 +270,71 @@ export default function DataVisualization() {
                         />
                       ))}
 
-                      {/* Profile Line */}
-                      <polyline
-                        fill="none"
-                        stroke={dataType === 'temperature' ? 'rgb(239, 68, 68)' : 'rgb(59, 130, 246)'}
-                        strokeWidth="3"
-                        strokeLinecap="round"
-                        points={mockProfileData.map((point, index) => {
-                          const x = 15 + ((dataType === 'temperature' ? point.temperature : point.salinity) / maxValue) * 70;
-                          const y = 5 + (point.depth / 500) * 85;
-                          return `${x},${y}`;
-                        }).join(' ')}
-                      />
+                        {/* Profile Line */}
+                        <polyline
+                          fill="none"
+                          stroke={dataType === 'temperature' ? 'rgb(239, 68, 68)' : 'rgb(59, 130, 246)'}
+                          strokeWidth="3"
+                          strokeLinecap="round"
+                          points={profileData.map((point) => {
+                            const value = dataType === 'temperature' ? point.temperature : point.salinity;
+                            const normalizedValue = (value - minValue) / (maxValue - minValue);
+                            const x = 15 + normalizedValue * 70;
+                            const y = 5 + (point.depth / maxDepth) * 85;
+                            return `${x},${y}`;
+                          }).join(' ')}
+                        />
 
-                      {/* Data Points */}
-                      {mockProfileData.map((point, index) => {
-                        const x = 15 + ((dataType === 'temperature' ? point.temperature : point.salinity) / maxValue) * 70;
-                        const y = 5 + (point.depth / 500) * 85;
-                        return (
-                          <circle
-                            key={index}
-                            cx={`${x}%`}
-                            cy={`${y}%`}
-                            r="4"
-                            fill={dataType === 'temperature' ? 'rgb(239, 68, 68)' : 'rgb(59, 130, 246)'}
-                            stroke="white"
-                            strokeWidth="2"
-                            className="hover:r-6 transition-all cursor-pointer"
-                          />
-                        );
-                      })}
-                    </svg>
+                        {/* Data Points */}
+                        {profileData.map((point, index) => {
+                          const value = dataType === 'temperature' ? point.temperature : point.salinity;
+                          const normalizedValue = (value - minValue) / (maxValue - minValue);
+                          const x = 15 + normalizedValue * 70;
+                          const y = 5 + (point.depth / maxDepth) * 85;
+                          return (
+                            <circle
+                              key={index}
+                              cx={`${x}%`}
+                              cy={`${y}%`}
+                              r="4"
+                              fill={dataType === 'temperature' ? 'rgb(239, 68, 68)' : 'rgb(59, 130, 246)'}
+                              stroke="white"
+                              strokeWidth="2"
+                              className="hover:r-6 transition-all cursor-pointer"
+                              title={`Depth: ${point.depth}m, ${dataType === 'temperature' ? 'Temperature' : 'Salinity'}: ${value}${dataType === 'temperature' ? '°C' : ' PSU'}`}
+                            />
+                          );
+                        })}
+                      </svg>
 
-                    {/* Axis Labels */}
-                    <div className="absolute left-2 top-1/2 -translate-y-1/2 -rotate-90 text-sm font-medium text-muted-foreground">
-                      Depth (m)
-                    </div>
-                    <div className="absolute bottom-2 left-1/2 -translate-x-1/2 text-sm font-medium text-muted-foreground">
-                      {dataType === 'temperature' ? 'Temperature (°C)' : 'Salinity (PSU)'}
-                    </div>
+                      {/* Axis Labels */}
+                      <div className="absolute left-2 top-1/2 -translate-y-1/2 -rotate-90 text-sm font-medium text-muted-foreground">
+                        Depth (m)
+                      </div>
+                      <div className="absolute bottom-2 left-1/2 -translate-x-1/2 text-sm font-medium text-muted-foreground">
+                        {dataType === 'temperature' ? 'Temperature (°C)' : 'Salinity (PSU)'}
+                      </div>
 
-                    {/* Depth Scale */}
-                    <div className="absolute left-2 top-0 bottom-0 flex flex-col justify-between py-4 text-xs text-muted-foreground">
-                      <span>0m</span>
-                      <span>100m</span>
-                      <span>200m</span>
-                      <span>300m</span>
-                      <span>400m</span>
-                      <span>500m</span>
-                    </div>
+                      {/* Depth Scale */}
+                      <div className="absolute left-2 top-0 bottom-0 flex flex-col justify-between py-4 text-xs text-muted-foreground">
+                        <span>0m</span>
+                        <span>{Math.round(maxDepth * 0.2)}m</span>
+                        <span>{Math.round(maxDepth * 0.4)}m</span>
+                        <span>{Math.round(maxDepth * 0.6)}m</span>
+                        <span>{Math.round(maxDepth * 0.8)}m</span>
+                        <span>{maxDepth}m</span>
+                      </div>
 
-                    {/* Value Scale */}
-                    <div className="absolute bottom-2 left-0 right-0 flex justify-between px-12 text-xs text-muted-foreground">
-                      {dataType === 'temperature' ? (
-                        <>
-                          <span>10°C</span>
-                          <span>15°C</span>
-                          <span>20°C</span>
-                          <span>25°C</span>
-                          <span>30°C</span>
-                        </>
-                      ) : (
-                        <>
-                          <span>34.5</span>
-                          <span>34.8</span>
-                          <span>35.1</span>
-                          <span>35.4</span>
-                          <span>35.7</span>
-                        </>
-                      )}
+                      {/* Value Scale */}
+                      <div className="absolute bottom-2 left-0 right-0 flex justify-between px-12 text-xs text-muted-foreground">
+                        <span>{minValue.toFixed(1)}{dataType === 'temperature' ? '°C' : ''}</span>
+                        <span>{(minValue + (maxValue - minValue) * 0.25).toFixed(1)}{dataType === 'temperature' ? '°C' : ''}</span>
+                        <span>{(minValue + (maxValue - minValue) * 0.5).toFixed(1)}{dataType === 'temperature' ? '°C' : ''}</span>
+                        <span>{(minValue + (maxValue - minValue) * 0.75).toFixed(1)}{dataType === 'temperature' ? '°C' : ''}</span>
+                        <span>{maxValue.toFixed(1)}{dataType === 'temperature' ? '°C' : ''}</span>
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </div>
               </CardContent>
             </Card>

@@ -1,28 +1,74 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { MapPin, Thermometer, Waves, Clock } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 
 interface FloatData {
   id: string;
+  floatId: string;
   latitude: number;
   longitude: number;
+  status: 'active' | 'inactive';
+  region: string | null;
+  deploymentDate: string | null;
+  lastUpdate: string | null;
+}
+
+interface MeasurementData {
+  depth: number;
   temperature: number;
   salinity: number;
-  depth: number;
-  lastUpdate: string;
-  status: 'active' | 'inactive';
+  pressure: number | null;
 }
 
 export default function InteractiveMap() {
-  // TODO: Remove mock data - replace with real Argo float data
   const [selectedFloat, setSelectedFloat] = useState<FloatData | null>(null);
-  const mockFloats: FloatData[] = [
-    { id: "ARGO001", latitude: -10.5, longitude: 75.2, temperature: 28.5, salinity: 34.7, depth: 150, lastUpdate: "2 hours ago", status: 'active' },
-    { id: "ARGO002", latitude: -8.3, longitude: 78.1, temperature: 27.8, salinity: 34.9, depth: 200, lastUpdate: "4 hours ago", status: 'active' },
-    { id: "ARGO003", latitude: -12.1, longitude: 72.8, temperature: 26.2, salinity: 35.1, depth: 180, lastUpdate: "1 day ago", status: 'inactive' },
-    { id: "ARGO004", latitude: -15.7, longitude: 80.5, temperature: 25.9, salinity: 34.8, depth: 220, lastUpdate: "6 hours ago", status: 'active' },
-  ];
+  const [latestMeasurement, setLatestMeasurement] = useState<MeasurementData | null>(null);
+
+  // Fetch all floats
+  const { data: floats = [], isLoading: floatsLoading } = useQuery<FloatData[]>({
+    queryKey: ['/api/floats'],
+    queryFn: async (): Promise<FloatData[]> => {
+      const response = await fetch('/api/floats');
+      if (!response.ok) throw new Error('Failed to fetch floats');
+      return response.json();
+    }
+  });
+
+  // Fetch latest measurement for selected float
+  const { data: measurements = [] } = useQuery<MeasurementData[]>({
+    queryKey: ['/api/measurements', selectedFloat?.floatId],
+    queryFn: async (): Promise<MeasurementData[]> => {
+      if (!selectedFloat?.floatId) return [];
+      const response = await fetch(`/api/measurements?floatId=${selectedFloat.floatId}`);
+      if (!response.ok) throw new Error('Failed to fetch measurements');
+      return response.json();
+    },
+    enabled: !!selectedFloat?.floatId
+  });
+
+  // Get latest measurement (surface or shallowest)
+  useEffect(() => {
+    if (measurements.length > 0) {
+      const surface = measurements.find(m => m.depth === 0) || measurements[0];
+      setLatestMeasurement(surface);
+    } else {
+      setLatestMeasurement(null);
+    }
+  }, [measurements]);
+
+  const formatLastUpdate = (dateString: string | null) => {
+    if (!dateString) return 'Unknown';
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffHours = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60));
+    
+    if (diffHours < 1) return 'Just now';
+    if (diffHours < 24) return `${diffHours} hours ago`;
+    const diffDays = Math.floor(diffHours / 24);
+    return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+  };
 
   return (
     <section id="demo" className="py-16 bg-background">
@@ -55,7 +101,7 @@ export default function InteractiveMap() {
                   </div>
 
                   {/* Float Markers */}
-                  {mockFloats.map((float, index) => (
+                  {floats.map((float, index) => (
                     <button
                       key={float.id}
                       className={`absolute w-6 h-6 rounded-full border-2 border-white shadow-lg hover-elevate transition-all duration-200 ${
@@ -66,7 +112,7 @@ export default function InteractiveMap() {
                         top: `${30 + index * 10}%`,
                       }}
                       onClick={() => setSelectedFloat(float)}
-                      data-testid={`marker-${float.id}`}
+                      data-testid={`marker-${float.floatId}`}
                     >
                       <MapPin className="w-4 h-4 text-white absolute -top-1 -left-1" />
                     </button>
@@ -78,7 +124,7 @@ export default function InteractiveMap() {
                       Indian Ocean Region
                     </Badge>
                     <div className="text-xs text-muted-foreground bg-background/80 backdrop-blur-sm p-2 rounded">
-                      {mockFloats.filter(f => f.status === 'active').length} Active Floats
+                      {floatsLoading ? 'Loading...' : `${floats.filter(f => f.status === 'active').length} Active Floats`}
                     </div>
                   </div>
                 </div>
@@ -99,7 +145,7 @@ export default function InteractiveMap() {
                 {selectedFloat ? (
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
-                      <span className="font-semibold">{selectedFloat.id}</span>
+                      <span className="font-semibold">{selectedFloat.floatId}</span>
                       <Badge variant={selectedFloat.status === 'active' ? 'default' : 'secondary'}>
                         {selectedFloat.status}
                       </Badge>
@@ -116,29 +162,35 @@ export default function InteractiveMap() {
                       </div>
                     </div>
 
-                    <div className="space-y-3">
-                      <div className="flex items-center gap-3">
-                        <Thermometer className="h-4 w-4 text-chart-3" />
-                        <div>
-                          <div className="text-sm text-muted-foreground">Temperature</div>
-                          <div className="font-semibold">{selectedFloat.temperature}°C</div>
+                    {latestMeasurement ? (
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-3">
+                          <Thermometer className="h-4 w-4 text-chart-3" />
+                          <div>
+                            <div className="text-sm text-muted-foreground">Temperature</div>
+                            <div className="font-semibold">{latestMeasurement.temperature}°C</div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <Waves className="h-4 w-4 text-chart-2" />
+                          <div>
+                            <div className="text-sm text-muted-foreground">Salinity</div>
+                            <div className="font-semibold">{latestMeasurement.salinity} PSU</div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <Clock className="h-4 w-4 text-chart-4" />
+                          <div>
+                            <div className="text-sm text-muted-foreground">Last Update</div>
+                            <div className="font-semibold">{formatLastUpdate(selectedFloat.lastUpdate)}</div>
+                          </div>
                         </div>
                       </div>
-                      <div className="flex items-center gap-3">
-                        <Waves className="h-4 w-4 text-chart-2" />
-                        <div>
-                          <div className="text-sm text-muted-foreground">Salinity</div>
-                          <div className="font-semibold">{selectedFloat.salinity} PSU</div>
-                        </div>
+                    ) : (
+                      <div className="text-center text-muted-foreground py-4">
+                        <p className="text-sm">Loading measurement data...</p>
                       </div>
-                      <div className="flex items-center gap-3">
-                        <Clock className="h-4 w-4 text-chart-4" />
-                        <div>
-                          <div className="text-sm text-muted-foreground">Last Update</div>
-                          <div className="font-semibold">{selectedFloat.lastUpdate}</div>
-                        </div>
-                      </div>
-                    </div>
+                    )}
                   </div>
                 ) : (
                   <div className="text-center text-muted-foreground py-8">
@@ -157,15 +209,19 @@ export default function InteractiveMap() {
               <CardContent className="space-y-3">
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-muted-foreground">Active Floats</span>
-                  <Badge variant="default">{mockFloats.filter(f => f.status === 'active').length}</Badge>
+                  <Badge variant="default">
+                    {floatsLoading ? '...' : floats.filter(f => f.status === 'active').length}
+                  </Badge>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-sm text-muted-foreground">Avg Temperature</span>
-                  <span className="font-semibold">27.1°C</span>
+                  <span className="text-sm text-muted-foreground">Total Floats</span>
+                  <span className="font-semibold">
+                    {floatsLoading ? 'Loading...' : floats.length}
+                  </span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-sm text-muted-foreground">Avg Salinity</span>
-                  <span className="font-semibold">34.9 PSU</span>
+                  <span className="text-sm text-muted-foreground">Region</span>
+                  <span className="font-semibold">Indian Ocean</span>
                 </div>
               </CardContent>
             </Card>

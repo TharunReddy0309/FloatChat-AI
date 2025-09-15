@@ -1,5 +1,6 @@
 import Navigation from "@/components/Navigation";
 import Hero from "@/components/Hero";
+import DevelopmentRoadmap from "@/components/DevelopmentRoadmap";
 import InteractiveMap from "@/components/InteractiveMap";
 import ChatInterface from "@/components/ChatInterface";
 import DataVisualization from "@/components/DataVisualization";
@@ -11,6 +12,7 @@ export default function Home() {
       <Navigation />
       <main>
         <Hero />
+        <DevelopmentRoadmap />
         <InteractiveMap />
         <ChatInterface />
         <DataVisualization />
