@@ -38,14 +38,6 @@ export default function Home() {
                 <a href="#about" className="block text-muted-foreground hover:text-primary transition-colors">About Team</a>
               </div>
             </div>
-            <div>
-              <h4 className="font-semibold mb-4">Contact</h4>
-              <div className="space-y-2 text-sm text-muted-foreground">
-                <p>SIH 2025 - Problem Statement SIH25040</p>
-                <p>Team: Ocean Data Innovators</p>
-                <p>Email: team@floatchat.research</p>
-              </div>
-            </div>
           </div>
           <div className="border-t mt-8 pt-8 text-center text-sm text-muted-foreground">
             <p>&copy; 2025 FloatChat. Built for Smart India Hackathon 2025.</p>
